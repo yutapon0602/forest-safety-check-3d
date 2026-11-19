@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forest Safety Check 3D — チェーンソー安全チェック</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:#0e1a12;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+  #hud{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10;}
+  #title{background:rgba(10,25,15,.82);color:#eafff0;border:1px solid #2e5d3a;border-radius:12px;padding:10px 14px;max-width:70vw;}
+  #title h1{font-size:17px;margin:0 0 2px;}
+  #title p{font-size:12px;margin:0;color:#bfe8c9;}
+  #langBtn{pointer-events:auto;background:#1d7a3d;color:#fff;border:none;border-radius:999px;padding:8px 16px;font-size:13px;cursor:pointer;}
+  #progress{position:fixed;top:96px;left:12px;background:rgba(10,25,15,.82);color:#eafff0;border:1px solid #2e5d3a;border-radius:12px;padding:8px 14px;font-size:14px;z-index:10;}
+  #panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,92vw);background:rgba(255,255,255,.97);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:16px 18px;z-index:20;display:none;}
+  #panel h2{font-size:17px;margin:0 0 6px;color:#123d21;}
+  #panel p{font-size:14px;margin:0 0 12px;color:#333;line-height:1.6;}
+  #panel .row{display:flex;gap:10px;}
+  #panel button{flex:1;padding:12px;border:none;border-radius:10px;font-size:15px;cursor:pointer;}
+  #okBtn{background:#1d7a3d;color:#fff;}
+  #ngBtn{background:#e8e8e8;color:#333;}
+  #done{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(6,30,12,.72);z-index:30;}
+  #done .card{background:#fff;border-radius:20px;padding:28px 34px;text-align:center;max-width:88vw;}
+  #done h2{color:#1d7a3d;margin:0 0 8px;font-size:24px;}
+  #done p{margin:0 0 16px;color:#333;font-size:15px;}
+  #done button{background:#1d7a3d;color:#fff;border:none;border-radius:10px;padding:10px 22px;font-size:15px;cursor:pointer;}
+  #hint{position:fixed;bottom:18px;left:12px;background:rgba(10,25,15,.75);color:#cfeeda;border-radius:10px;padding:7px 12px;font-size:12px;z-index:9;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div id="title">
+    <h1 id="t-title">チェーンソー安全チェック 3D</h1>
+    <p id="t-sub">番号のピンを押して、作業前の安全を1つずつ確認しましょう</p>
+  </div>
+  <button id="langBtn">EN</button>
+</div>
+<div id="progress"><span id="t-prog">確認ずみ</span>: <b id="count">0</b> / 6</div>
+<div id="hint">ドラッグ: まわりを見る ／ ホイール: 近づく・離れる</div>
+
+<div id="panel">
+  <h2 id="p-title"></h2>
+  <p id="p-body"></p>
+  <div class="row">
+    <button id="okBtn">OK</button>
+    <button id="ngBtn">まだ</button>
+  </div>
+</div>
+
+<div id="done">
+  <div class="card">
+    <h2 id="d-title">ぜんぶ確認できました</h2>
+    <p id="d-body">安全が確認できました。作業を始めてよいです。</p>
+    <button id="againBtn">もう一度</button>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const I18N = {
+  ja:{title:"チェーンソー安全チェック 3D",sub:"番号のピンを押して、作業前の安全を1つずつ確認しましょう",prog:"確認ずみ",ok:"OK",ng:"まだ",doneT:"ぜんぶ確認できました",doneB:"安全が確認できました。作業を始めてよいです。",again:"もう一度"},
+  en:{title:"Chainsaw Safety Check 3D",sub:"Tap the numbered pins and check each safety point before work.",prog:"Checked",ok:"OK",ng:"Not yet",doneT:"All points checked",doneB:"Safety confirmed. You may start work.",again:"Check again"}
+};
+let lang = 'ja';
+
+const CHECKS = [
+ {pos:[2.6,1.5,0.6], ja:{t:"1. 防護具（ぼうごぐ）",b:"ヘルメット、耳あて、手袋、防護ズボンを着けていますか。"}, en:{t:"1. Protective gear",b:"Are you wearing a helmet, ear protection, gloves and protective trousers?"}},
+ {pos:[1.4,1.0,1.8], ja:{t:"2. チェーンソーのブレーキ",b:"チェーンブレーキが、きちんと効きますか。"}, en:{t:"2. Chain brake",b:"Does the chain brake work properly?"}},
+ {pos:[1.9,0.7,2.2], ja:{t:"3. 燃料（ねんりょう）の漏れ",b:"燃料やオイルが漏れていませんか。"}, en:{t:"3. Fuel leaks",b:"Is any fuel or oil leaking?"}},
+ {pos:[-2.5,1.2,-1.5], ja:{t:"4. まわりの人",b:"作業する場所のまわりに、他の人がいませんか。"}, en:{t:"4. People nearby",b:"Is anyone else inside the work area?"}},
+ {pos:[-1.8,0.9,2.4], ja:{t:"5. 逃げ道（にげみち）",b:"木が倒れたときに逃げる道が、空いていますか。"}, en:{t:"5. Escape route",b:"Is your escape route clear if the tree falls?"}},
+ {pos:[0,3.4,-2.6], ja:{t:"6. 倒れる方向",b:"木が倒れる方向と、その先に何も無いことを確認しましたか。"}, en:{t:"6. Felling direction",b:"Did you check the felling direction and that the landing zone is clear?"}}
+];
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbfd9c2);
+scene.fog = new THREE.Fog(0xbfd9c2, 18, 40);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(6.5, 4.2, 7.5);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+document.getElementById('app').appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.2, 0);
+controls.maxPolarAngle = Math.PI * 0.49;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x3a5f43, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(6, 10, 4);
+scene.add(sun);
+
+const ground = new THREE.Mesh(new THREE.CircleGeometry(16, 40), new THREE.MeshStandardMaterial({color:0x5d7d4a, roughness:1}));
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// --- Placeholder props (replaced automatically if Lux3D GLB files exist in ./assets) ---
+function placeholderTree(x, z, s=1){
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14*s, 0.2*s, 1.6*s, 8), new THREE.MeshStandardMaterial({color:0x6b4a2f, roughness:1}));
+  trunk.position.y = 0.8*s; g.add(trunk);
+  const c1 = new THREE.Mesh(new THREE.ConeGeometry(1.15*s, 2.6*s, 10), new THREE.MeshStandardMaterial({color:0x2e5d33, roughness:1}));
+  c1.position.y = 2.6*s; g.add(c1);
+  const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.85*s, 2.0*s, 10), new THREE.MeshStandardMaterial({color:0x35703c, roughness:1}));
+  c2.position.y = 3.9*s; g.add(c2);
+  g.position.set(x, 0, z);
+  scene.add(g);
+  return g;
+}
+const mainTree = placeholderTree(0, -2.6, 1.15);
+placeholderTree(-4.5, -3.5, 0.9); placeholderTree(4.8, -4.2, 1.0); placeholderTree(-5.5, 1.5, 0.8); placeholderTree(5.6, 2.2, 0.85); placeholderTree(-3.4, -6, 1.05); placeholderTree(3.6, -6.4, 0.95);
+
+// log pile
+const logMat = new THREE.MeshStandardMaterial({color:0x8a6844, roughness:1});
+const logPile = new THREE.Group();
+[[-2.6,0.22,1.6],[-2.6,0.22,2.15],[-2.6,0.62,1.88]].forEach(p=>{
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,1.7,10), logMat);
+  log.rotation.z = Math.PI/2; log.position.set(p[0],p[1],p[2]); logPile.add(log);
+});
+scene.add(logPile);
+// helmet stand (checkpoint 1)
+const stand = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.78,0.34), new THREE.MeshStandardMaterial({color:0x4a4a44, roughness:0.9}));
+stand.position.set(2.6, 0.39, 0.6); scene.add(stand);
+const helmetPH = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color:0xf2f2f2, roughness:0.5}));
+helmetPH.position.set(2.6, 0.78, 0.6); scene.add(helmetPH);
+// stump + simple chainsaw placeholder
+const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.48,0.5,12), new THREE.MeshStandardMaterial({color:0x7d5a38, roughness:1}));
+stump.position.set(1.7, 0.25, 2.0); scene.add(stump);
+const saw = new THREE.Group();
+const sawBody = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.3,0.24), new THREE.MeshStandardMaterial({color:0xe06a1b, roughness:0.6}));
+saw.add(sawBody);
+const sawBar = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.11,0.03), new THREE.MeshStandardMaterial({color:0xb9c0c4, roughness:0.35, metalness:0.7}));
+sawBar.position.set(0.5,-0.03,0); saw.add(sawBar);
+saw.position.set(1.7, 0.72, 2.0); saw.rotation.y = -0.5;
+scene.add(saw);
+
+// Try loading Lux3D-generated GLB assets; if present they replace the placeholders.
+// Each model is auto-scaled to a real-world target height and grounded, so any
+// generated model drops in correctly regardless of its native scale.
+const loader = new GLTFLoader();
+function tryLoad(file, targetH, x, z, rotY, onPlaced){
+  loader.load(file, gltf=>{
+    const s = gltf.scene;
+    const box = new THREE.Box3().setFromObject(s);
+    const size = box.getSize(new THREE.Vector3());
+    if (size.y > 0) s.scale.setScalar(targetH / size.y);
+    s.position.set(x, 0, z);
+    const box2 = new THREE.Box3().setFromObject(s);
+    s.position.y = -box2.min.y;
+    if (rotY) s.rotation.y = rotY;
+    scene.add(s);
+    if (onPlaced) onPlaced(s);
+  }, undefined, ()=>{});
+}
+tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/ec99155fe55841f8bc60104705f1482a/textured.glb', 0.34, 1.7, 2.0, -0.5, s=>{ scene.remove(saw); s.position.y = 0.5; });
+tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/866e7519d5724268894b5f90223b5e50/textured.glb', 7.0, 0, -2.6, 0, ()=>{ scene.remove(mainTree); });
+tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/ec556fb462bd4a2ba9d4ccc05cd209ca/textured.glb', 0.95, -2.6, 1.9, 0.3, ()=>{ scene.remove(logPile); });
+tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/b1af018d56584fa38b8ab2ae522f9467/textured.glb', 0.30, 2.6, 0.6, 0, s=>{ scene.remove(helmetPH); s.position.y = 0.78; });
+
+// --- Checkpoint pins ---
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const pins = [];
+const pinMat = new THREE.MeshStandardMaterial({color:0xffb020, roughness:0.4, emissive:0x442a00});
+const pinMatDone = new THREE.MeshStandardMaterial({color:0x2fae4e, roughness:0.4, emissive:0x06350f});
+CHECKS.forEach((c, i)=>{
+  const pin = new THREE.Mesh(new THREE.SphereGeometry(0.21, 20, 16), pinMat.clone());
+  pin.position.set(c.pos[0], c.pos[1], c.pos[2]);
+  pin.userData.index = i;
+  scene.add(pin); pins.push(pin);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const cx = cv.getContext('2d');
+  cx.fillStyle = '#ffb020'; cx.beginPath(); cx.arc(64,64,60,0,7); cx.fill();
+  cx.fillStyle = '#1c1c1c'; cx.font = 'bold 72px sans-serif'; cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(String(i+1), 64, 68);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true}));
+  sp.scale.set(0.55,0.55,1); sp.position.set(c.pos[0], c.pos[1]+0.45, c.pos[2]);
+  scene.add(sp);
+  c.sprite = sp; c.pin = pin;
+});
+
+let current = -1;
+const doneSet = new Set();
+const panel = document.getElementById('panel');
+function openCheck(i){
+  current = i;
+  const c = CHECKS[i][lang];
+  document.getElementById('p-title').textContent = c.t;
+  document.getElementById('p-body').textContent = c.b;
+  panel.style.display = 'block';
+}
+function closeCheck(ok){
+  if (current < 0) return;
+  if (ok){
+    doneSet.add(current);
+    CHECKS[current].pin.material = pinMatDone;
+    CHECKS[current].sprite.material.opacity = 0.35;
+  }
+  document.getElementById('count').textContent = doneSet.size;
+  panel.style.display = 'none';
+  current = -1;
+  if (doneSet.size === CHECKS.length) document.getElementById('done').style.display = 'flex';
+}
+document.getElementById('okBtn').onclick = ()=>closeCheck(true);
+document.getElementById('ngBtn').onclick = ()=>closeCheck(false);
+document.getElementById('againBtn').onclick = ()=>{
+  doneSet.clear();
+  CHECKS.forEach(c=>{ c.pin.material = pinMat.clone(); c.sprite.material.opacity = 1; });
+  document.getElementById('count').textContent = 0;
+  document.getElementById('done').style.display = 'none';
+};
+renderer.domElement.addEventListener('pointerdown', e=>{
+  pointer.x = (e.clientX/innerWidth)*2-1;
+  pointer.y = -(e.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(pins);
+  if (hit.length) openCheck(hit[0].object.userData.index);
+});
+
+function applyLang(){
+  const t = I18N[lang];
+  document.getElementById('t-title').textContent = t.title;
+  document.getElementById('t-sub').textContent = t.sub;
+  document.getElementById('t-prog').textContent = t.prog;
+  document.getElementById('okBtn').textContent = t.ok;
+  document.getElementById('ngBtn').textContent = t.ng;
+  document.getElementById('d-title').textContent = t.doneT;
+  document.getElementById('d-body').textContent = t.doneB;
+  document.getElementById('againBtn').textContent = t.again;
+  document.getElementById('langBtn').textContent = lang === 'ja' ? 'EN' : '日本語';
+}
+document.getElementById('langBtn').onclick = ()=>{ lang = lang === 'ja' ? 'en' : 'ja'; applyLang(); if (current >= 0) openCheck(current); };
+applyLang();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const t = performance.now()/1000;
+  pins.forEach((p, i)=>{ if (!doneSet.has(i)) p.position.y = CHECKS[i].pos[1] + Math.sin(t*2 + i)*0.06; });
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
