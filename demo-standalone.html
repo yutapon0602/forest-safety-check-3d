@@ -78,7 +78,7 @@ const CHECKS = [
  {pos:[1.9,0.7,2.2], ja:{t:"3. 燃料（ねんりょう）の漏れ",b:"燃料やオイルが漏れていませんか。"}, en:{t:"3. Fuel leaks",b:"Is any fuel or oil leaking?"}},
  {pos:[-2.5,1.2,-1.5], ja:{t:"4. まわりの人",b:"作業する場所のまわりに、他の人がいませんか。"}, en:{t:"4. People nearby",b:"Is anyone else inside the work area?"}},
  {pos:[-1.8,0.9,2.4], ja:{t:"5. 逃げ道（にげみち）",b:"木が倒れたときに逃げる道が、空いていますか。"}, en:{t:"5. Escape route",b:"Is your escape route clear if the tree falls?"}},
- {pos:[0,3.4,-2.6], ja:{t:"6. 倒れる方向",b:"木が倒れる方向と、その先に何も無いことを確認しましたか。"}, en:{t:"6. Felling direction",b:"Did you check the felling direction and that the landing zone is clear?"}}
+ {pos:[1.7,3.1,-2.7], ja:{t:"6. 倒れる方向",b:"木が倒れる方向と、その先に何も無いことを確認しましたか。"}, en:{t:"6. Felling direction",b:"Did you check the felling direction and that the landing zone is clear?"}}
 ];
 
 const scene = new THREE.Scene();
@@ -144,15 +144,18 @@ saw.position.set(1.7, 0.72, 2.0); saw.rotation.y = -0.5;
 scene.add(saw);
 
 // Try loading Lux3D-generated GLB assets; if present they replace the placeholders.
-// Each model is auto-scaled to a real-world target height and grounded, so any
+// Each model is auto-scaled to a real-world size and grounded, so any
 // generated model drops in correctly regardless of its native scale.
+// fitMode 'height': scale so the model's height matches target.
+// fitMode 'longest': scale so the model's longest side matches target.
 const loader = new GLTFLoader();
-function tryLoad(file, targetH, x, z, rotY, onPlaced){
+function tryLoad(file, target, x, z, rotY, onPlaced, fitMode){
   loader.load(file, gltf=>{
     const s = gltf.scene;
     const box = new THREE.Box3().setFromObject(s);
     const size = box.getSize(new THREE.Vector3());
-    if (size.y > 0) s.scale.setScalar(targetH / size.y);
+    const base = fitMode === 'longest' ? Math.max(size.x, size.y, size.z) : size.y;
+    if (base > 0) s.scale.setScalar(target / base);
     s.position.set(x, 0, z);
     const box2 = new THREE.Box3().setFromObject(s);
     s.position.y = -box2.min.y;
@@ -161,7 +164,7 @@ function tryLoad(file, targetH, x, z, rotY, onPlaced){
     if (onPlaced) onPlaced(s);
   }, undefined, ()=>{});
 }
-tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/ec99155fe55841f8bc60104705f1482a/textured.glb', 0.34, 1.7, 2.0, -0.5, s=>{ scene.remove(saw); s.position.y = 0.5; });
+tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/ec99155fe55841f8bc60104705f1482a/textured.glb', 0.85, 1.7, 2.0, -0.5, s=>{ scene.remove(saw); s.position.y = 0.5; }, 'longest');
 tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/866e7519d5724268894b5f90223b5e50/textured.glb', 7.0, 0, -2.6, 0, ()=>{ scene.remove(mainTree); });
 tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/ec556fb462bd4a2ba9d4ccc05cd209ca/textured.glb', 0.95, -2.6, 1.9, 0.3, ()=>{ scene.remove(logPile); });
 tryLoad('https://qhsmodel.kujiale.com/lux3dPbrEmbedResult/b1af018d56584fa38b8ab2ae522f9467/textured.glb', 0.30, 2.6, 0.6, 0, s=>{ scene.remove(helmetPH); s.position.y = 0.78; });
